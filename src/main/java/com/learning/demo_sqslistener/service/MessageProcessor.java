@@ -76,21 +76,21 @@ public class MessageProcessor {
      */
     public void processMessage(Message message) {
         try {
-            logger.debug("Starting to process message: {}", message != null ? message.getMessageId() : "null");
-            validateMessage(message);
+            validateMessage(message); // This throws IllegalArgumentException if message is null
+            String messageId = message.getMessageId(); // Safe after validation
+            logger.debug("Starting to process message: {}", messageId);
             String sanitizedContent = sanitizeMessageContent(message.getBody());
-            processContent(message.getMessageId(), sanitizedContent);
-            logger.info("Successfully processed message: {}", message.getMessageId());
-        } catch (IllegalArgumentException e) {
-            throw e;
-        } catch (MessageProcessingException e) {
-            // Re-throw MessageProcessingException directly
+            processContent(messageId, sanitizedContent);
+            logger.info("Successfully processed message: {}", messageId);
+        } catch (IllegalArgumentException | MessageProcessingException e) {
+            String messageId = message != null ? message.getMessageId() : "null";
+            logger.error("Processing failed for message {}: {}", messageId, e.getMessage(), e);
             throw e;
         } catch (Exception e) {
-            String errorMsg = String.format("Message ID: %s", 
-                message != null ? message.getMessageId() : "null");
-            logger.error("Message processing failed: {}", errorMsg, e);
-            throw new MessageProcessingException(ErrorCodes.MESSAGE_PROCESSING_ERROR, errorMsg, e);
+            String messageId = message != null ? message.getMessageId() : "null";
+            logger.error("Message processing failed for message {}", messageId, e);
+            throw new MessageProcessingException(ErrorCodes.MESSAGE_PROCESSING_ERROR, 
+                String.format("Message ID: %s", messageId), e);
         }
     }
 
@@ -169,9 +169,14 @@ public class MessageProcessor {
     }
 
     private void validateJsonFormat(String content) throws JsonProcessingException {
-        logger.debug("Validating JSON format");
-        objectMapper.readTree(content);
-        logger.debug("JSON format validation successful");
+        try {
+            logger.debug("Validating JSON format");
+            objectMapper.readTree(content);
+            logger.debug("JSON format validation successful");
+        } catch (JsonProcessingException e) {
+            logger.error("JSON validation failed: {}", e.getMessage(), e);
+            throw e;
+        }
     }
 
     private boolean isValidUrl(String url) {
@@ -179,6 +184,7 @@ public class MessageProcessor {
             new java.net.URL(url).toURI();
             return true;
         } catch (Exception e) {
+            logger.warn("Invalid URL format: {}", url, e);
             return false;
         }
     }

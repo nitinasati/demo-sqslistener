@@ -4,8 +4,6 @@ import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.MessageAttributeValue;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
-import com.learning.demo_sqslistener.exception.ErrorCodes;
-import com.learning.demo_sqslistener.exception.SQSProcessingException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -45,7 +43,7 @@ public class DeadLetterQueueService {
             amazonSQS.deleteMessage(sourceQueueUrl, message.getReceiptHandle());
             logger.info("Moved message {} to DLQ with reason: {}", message.getMessageId(), failureReason);
             return true;
-        } catch (Exception e) {
+        } catch (RuntimeException | Error e) {
             logger.error("Failed to move message {} to DLQ: {}", message.getMessageId(), e.getMessage(), e);
             return false;
         }

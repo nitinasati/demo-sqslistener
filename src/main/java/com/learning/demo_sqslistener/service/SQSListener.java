@@ -134,44 +134,4 @@ public class SQSListener {
             }
         }
     }
-
-    private void moveToDeadLetterQueue(Message message) {
-        try {
-            // Send to DLQ with original message attributes plus error context
-            SendMessageRequest dlqRequest = new SendMessageRequest()
-                .withQueueUrl(dlqUrl)
-                .withMessageBody(message.getBody())
-                .withMessageAttributes(Map.of(
-                    "OriginalMessageId", new MessageAttributeValue()
-                        .withDataType("String")
-                        .withStringValue(message.getMessageId()),
-                    "FailureReason", new MessageAttributeValue()
-                        .withDataType("String")
-                        .withStringValue("Exceeded maximum retry attempts")
-                ));
-
-            amazonSQS.sendMessage(dlqRequest);
-            // Delete from original queue
-            amazonSQS.deleteMessage(queueUrl, message.getReceiptHandle());
-            logger.info("Moved message {} to DLQ after {} failed attempts", 
-                message.getMessageId(), MAX_RETRIES);
-        } catch (Exception e) {
-            logger.error("Failed to move message {} to DLQ", message.getMessageId(), e);
-        }
-    }
-
-    private void changeMessageVisibility(Message message, int visibilityTimeout) {
-        try {
-            ChangeMessageVisibilityRequest request = new ChangeMessageVisibilityRequest()
-                .withQueueUrl(queueUrl)
-                .withReceiptHandle(message.getReceiptHandle())
-                .withVisibilityTimeout(visibilityTimeout);
-            
-            amazonSQS.changeMessageVisibility(request);
-            logger.debug("Changed visibility timeout for message {} to {} seconds", 
-                message.getMessageId(), visibilityTimeout);
-        } catch (Exception e) {
-            logger.error("Failed to change message visibility for {}", message.getMessageId(), e);
-        }
-    }
 } 
