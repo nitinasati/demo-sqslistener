@@ -142,4 +142,57 @@ The application expects messages in JSON format:
 Please read CONTRIBUTING.md for details on our code of conduct and the process for submitting pull requests.
 
 ## License
-This project is licensed under the MIT License - see the LICENSE file for details. 
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## AWS Configuration Requirements
+
+### AWS Credentials
+To connect to AWS SQS, you need one of the following authentication methods:
+
+1. **Environment Variables** (Recommended for local development):
+   ```bash
+   export AWS_ACCESS_KEY_ID=your_access_key
+   export AWS_SECRET_ACCESS_KEY=your_secret_key
+   export AWS_REGION=your_region
+   ```
+
+2. **AWS Instance Role** (Recommended for EC2/ECS deployment):
+   - Attach an IAM role to your EC2 instance or ECS task
+   - Required SQS permissions in the role:
+     ```json
+     {
+         "Version": "2012-10-17",
+         "Statement": [
+             {
+                 "Effect": "Allow",
+                 "Action": [
+                     "sqs:ReceiveMessage",
+                     "sqs:DeleteMessage",
+                     "sqs:GetQueueAttributes",
+                     "sqs:ChangeMessageVisibility",
+                     "sqs:SendMessage"
+                 ],
+                 "Resource": [
+                     "arn:aws:sqs:region:account:queuename",
+                     "arn:aws:sqs:region:account:queuename-dlq"
+                 ]
+             }
+         ]
+     }
+     ```
+
+3. **AWS Credentials file** (Alternative for local development):
+   - Location: `~/.aws/credentials`
+   - Format:
+     ```ini
+     [default]
+     aws_access_key_id = your_access_key
+     aws_secret_access_key = your_secret_key
+     ```
+
+### Security Best Practices
+- Never commit AWS credentials to version control
+- Rotate access keys regularly
+- Use IAM roles with minimum required permissions
+- Enable CloudTrail logging for SQS operations
+- Use VPC endpoints for SQS when possible 

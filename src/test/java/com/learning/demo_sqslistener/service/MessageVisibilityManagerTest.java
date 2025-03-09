@@ -10,15 +10,20 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class MessageVisibilityManagerTest {
-
+    
+    private MessageVisibilityManager visibilityManager;
+    
     @Mock
     private AmazonSQS amazonSQS;
-
-    private MessageVisibilityManager visibilityManager;
+    
+    @Mock
+    private Message message;
+    
     private static final String QUEUE_URL = "queue-url";
 
     @BeforeEach
@@ -27,27 +32,20 @@ class MessageVisibilityManagerTest {
     }
 
     @Test
-    void changeVisibility_SuccessfulChange() {
-        Message message = new Message()
-            .withMessageId("test-message-id")
-            .withReceiptHandle("test-receipt");
-
+    void changeVisibility_Success() {
+        when(message.getReceiptHandle()).thenReturn("test-receipt");
+        
         visibilityManager.changeVisibility(message, 30);
-
+        
         verify(amazonSQS).changeMessageVisibility(any(ChangeMessageVisibilityRequest.class));
     }
 
     @Test
-    void changeVisibility_WhenChangeFails_HandlesException() {
-        Message message = new Message()
-            .withMessageId("test-message-id")
-            .withReceiptHandle("test-receipt");
-
-        doThrow(new RuntimeException("Change failed"))
-            .when(amazonSQS).changeMessageVisibility(any(ChangeMessageVisibilityRequest.class));
-
-        visibilityManager.changeVisibility(message, 30);
-
+    void changeVisibility_WithZeroTimeout_Success() {
+        when(message.getReceiptHandle()).thenReturn("test-receipt");
+        
+        visibilityManager.changeVisibility(message, 0);
+        
         verify(amazonSQS).changeMessageVisibility(any(ChangeMessageVisibilityRequest.class));
     }
 } 

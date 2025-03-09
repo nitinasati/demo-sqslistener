@@ -14,21 +14,22 @@ import java.util.Map;
 public class DeadLetterQueueService {
     private static final Logger logger = LoggerFactory.getLogger(DeadLetterQueueService.class);
     private final AmazonSQS amazonSQS;
-    private final String dlqUrl;
-    private final String queueUrl;
+    private final String sourceQueueUrl;
+    private final String deadLetterQueueUrl;
 
-    public DeadLetterQueueService(AmazonSQS amazonSQS,
-                                 @Value("${aws.sqs.dlq.url}") String dlqUrl,
-                                 @Value("${aws.sqs.url}") String queueUrl) {
+    public DeadLetterQueueService(
+            AmazonSQS amazonSQS,
+            @Value("${aws.sqs.url}") String sourceQueueUrl,
+            @Value("${aws.sqs.dlq.url}") String deadLetterQueueUrl) {
         this.amazonSQS = amazonSQS;
-        this.dlqUrl = dlqUrl;
-        this.queueUrl = queueUrl;
+        this.sourceQueueUrl = sourceQueueUrl;
+        this.deadLetterQueueUrl = deadLetterQueueUrl;
     }
 
-    public void moveMessageToDLQ(Message message, String reason) {
+    public void moveMessageToDLQ(Message message, String failureReason) {
         try {
             SendMessageRequest dlqRequest = new SendMessageRequest()
-                .withQueueUrl(dlqUrl)
+                .withQueueUrl(deadLetterQueueUrl)
                 .withMessageBody(message.getBody())
                 .withMessageAttributes(Map.of(
                     "OriginalMessageId", new MessageAttributeValue()
@@ -36,12 +37,12 @@ public class DeadLetterQueueService {
                         .withStringValue(message.getMessageId()),
                     "FailureReason", new MessageAttributeValue()
                         .withDataType("String")
-                        .withStringValue(reason)
+                        .withStringValue(failureReason)
                 ));
 
             amazonSQS.sendMessage(dlqRequest);
-            amazonSQS.deleteMessage(queueUrl, message.getReceiptHandle());
-            logger.info("Moved message {} to DLQ. Reason: {}", message.getMessageId(), reason);
+            amazonSQS.deleteMessage(sourceQueueUrl, message.getReceiptHandle());
+            logger.info("Moved message {} to DLQ with reason: {}", message.getMessageId(), failureReason);
         } catch (Exception e) {
             logger.error("Failed to move message {} to DLQ", message.getMessageId(), e);
         }

@@ -6,52 +6,61 @@ import com.amazonaws.services.sqs.model.SendMessageRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class DeadLetterQueueServiceTest {
 
+    private DeadLetterQueueService dlqService;
+
     @Mock
     private AmazonSQS amazonSQS;
 
-    private DeadLetterQueueService dlqService;
-    private static final String DLQ_URL = "dlq-url";
+    @Mock
+    private Message message;
+
     private static final String QUEUE_URL = "queue-url";
+    private static final String DLQ_URL = "dlq-url";
 
     @BeforeEach
     void setUp() {
-        dlqService = new DeadLetterQueueService(amazonSQS, DLQ_URL, QUEUE_URL);
+        dlqService = new DeadLetterQueueService(amazonSQS, QUEUE_URL, DLQ_URL);
     }
 
     @Test
-    void moveMessageToDLQ_SuccessfulMove() {
-        Message message = new Message()
-            .withMessageId("test-message-id")
-            .withBody("test-body")
-            .withReceiptHandle("test-receipt");
+    void moveMessageToDLQ_Success() {
+        when(message.getMessageId()).thenReturn("test-id");
+        when(message.getBody()).thenReturn("test-body");
+        when(message.getReceiptHandle()).thenReturn("test-receipt");
 
-        dlqService.moveMessageToDLQ(message, "test reason");
+        dlqService.moveMessageToDLQ(message, "Test failure reason");
 
-        verify(amazonSQS).sendMessage(any(SendMessageRequest.class));
-        verify(amazonSQS).deleteMessage(QUEUE_URL, message.getReceiptHandle());
+        ArgumentCaptor<SendMessageRequest> sendMessageCaptor = ArgumentCaptor.forClass(SendMessageRequest.class);
+        verify(amazonSQS).sendMessage(sendMessageCaptor.capture());
+        verify(amazonSQS).deleteMessage(QUEUE_URL, "test-receipt");
+
+        SendMessageRequest capturedRequest = sendMessageCaptor.getValue();
+        assertEquals(DLQ_URL, capturedRequest.getQueueUrl());
+        assertEquals("test-body", capturedRequest.getMessageBody());
+        assertEquals("test-id", capturedRequest.getMessageAttributes().get("OriginalMessageId").getStringValue());
+        assertEquals("Test failure reason", capturedRequest.getMessageAttributes().get("FailureReason").getStringValue());
     }
 
     @Test
-    void moveMessageToDLQ_WhenSendMessageFails_HandlesException() {
-        Message message = new Message()
-            .withMessageId("test-message-id")
-            .withBody("test-body");
-
+    void moveMessageToDLQ_WhenSendFails_DoesNotDelete() {
+        when(message.getMessageId()).thenReturn("test-id");
+        when(message.getBody()).thenReturn("test-body");
         when(amazonSQS.sendMessage(any(SendMessageRequest.class)))
             .thenThrow(new RuntimeException("Send failed"));
 
-        dlqService.moveMessageToDLQ(message, "test reason");
+        dlqService.moveMessageToDLQ(message, "Test failure reason");
 
-        verify(amazonSQS).sendMessage(any(SendMessageRequest.class));
         verify(amazonSQS, never()).deleteMessage(anyString(), anyString());
     }
 } 

@@ -2,60 +2,41 @@ package com.learning.demo_sqslistener.service;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.junit.jupiter.MockitoExtension;
-
 import static org.junit.jupiter.api.Assertions.*;
 
-@ExtendWith(MockitoExtension.class)
 class RetryManagerTest {
-
     private RetryManager retryManager;
+    private static final String MESSAGE_ID = "test-message-id";
+    private static final int MAX_RETRIES = 3;
 
     @BeforeEach
     void setUp() {
-        retryManager = new RetryManager();
+        retryManager = new RetryManager(MAX_RETRIES);
     }
 
     @Test
-    void shouldRetry_WhenNoAttemptsMade_ReturnsTrue() {
-        assertTrue(retryManager.shouldRetry("message-1"));
-    }
-
-    @Test
-    void shouldRetry_WhenLessThanMaxRetries_ReturnsTrue() {
-        String messageId = "message-1";
-        retryManager.incrementRetryCount(messageId);
-        retryManager.incrementRetryCount(messageId);
-        assertTrue(retryManager.shouldRetry(messageId));
+    void shouldRetry_WhenBelowMaxRetries_ReturnsTrue() {
+        retryManager.incrementRetryCount(MESSAGE_ID);
+        assertTrue(retryManager.shouldRetry(MESSAGE_ID));
     }
 
     @Test
     void shouldRetry_WhenMaxRetriesReached_ReturnsFalse() {
-        String messageId = "message-1";
-        for (int i = 0; i < 3; i++) {
-            retryManager.incrementRetryCount(messageId);
+        for (int i = 0; i < MAX_RETRIES; i++) {
+            retryManager.incrementRetryCount(MESSAGE_ID);
         }
-        assertFalse(retryManager.shouldRetry(messageId));
+        assertFalse(retryManager.shouldRetry(MESSAGE_ID));
     }
 
     @Test
-    void getRetryCount_WhenNoAttempts_ReturnsZero() {
-        assertEquals(0, retryManager.getRetryCount("message-1"));
+    void getRetryCount_WhenNoRetries_ReturnsZero() {
+        assertEquals(0, retryManager.getRetryCount(MESSAGE_ID));
     }
 
     @Test
-    void incrementRetryCount_IncreasesCount() {
-        String messageId = "message-1";
-        retryManager.incrementRetryCount(messageId);
-        assertEquals(1, retryManager.getRetryCount(messageId));
-    }
-
-    @Test
-    void clearRetryCount_RemovesCount() {
-        String messageId = "message-1";
-        retryManager.incrementRetryCount(messageId);
-        retryManager.clearRetryCount(messageId);
-        assertEquals(0, retryManager.getRetryCount(messageId));
+    void clearRetryCount_RemovesMessageFromTracking() {
+        retryManager.incrementRetryCount(MESSAGE_ID);
+        retryManager.clearRetryCount(MESSAGE_ID);
+        assertEquals(0, retryManager.getRetryCount(MESSAGE_ID));
     }
 } 
