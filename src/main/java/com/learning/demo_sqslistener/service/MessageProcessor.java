@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import com.amazonaws.services.sqs.model.Message;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.learning.demo_sqslistener.exception.ErrorCodes;
 import com.learning.demo_sqslistener.exception.MessageProcessingException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -48,6 +49,11 @@ public class MessageProcessor {
      * @throws IllegalArgumentException if apiUrl is null or empty
      */
     public MessageProcessor(@Value("${api.endpoint.url}") String apiUrl) {
+        if (!isValidUrl(apiUrl)) {
+            logger.error("Invalid API URL provided: {}", apiUrl);
+            throw new IllegalArgumentException(
+                String.format("Invalid API URL: %s", apiUrl));
+        }
         this.restTemplate = new RestTemplate();
         this.apiUrl = apiUrl;
         logger.info("MessageProcessor initialized with API URL: {}", apiUrl);
@@ -70,14 +76,21 @@ public class MessageProcessor {
      */
     public void processMessage(Message message) {
         try {
+            logger.debug("Starting to process message: {}", message != null ? message.getMessageId() : "null");
             validateMessage(message);
             String sanitizedContent = sanitizeMessageContent(message.getBody());
             processContent(message.getMessageId(), sanitizedContent);
+            logger.info("Successfully processed message: {}", message.getMessageId());
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (MessageProcessingException e) {
+            // Re-throw MessageProcessingException directly
+            throw e;
         } catch (Exception e) {
-            String errorMsg = String.format("Failed to process message ID: %s - %s", 
-                message != null ? message.getMessageId() : "null", e.getMessage());
-            logger.error(errorMsg, e);
-            throw new MessageProcessingException(errorMsg, e);
+            String errorMsg = String.format("Message ID: %s", 
+                message != null ? message.getMessageId() : "null");
+            logger.error("Message processing failed: {}", errorMsg, e);
+            throw new MessageProcessingException(ErrorCodes.MESSAGE_PROCESSING_ERROR, errorMsg, e);
         }
     }
 
@@ -89,13 +102,19 @@ public class MessageProcessor {
      *         or message size exceeds MAX_MESSAGE_SIZE
      */
     void validateMessage(Message message) {
+        logger.debug("Validating message...");
         if (message == null || message.getBody() == null) {
+            logger.error("Null message or message body received");
             throw new IllegalArgumentException("Message or message body cannot be null");
         }
         if (message.getBody().length() > MAX_MESSAGE_SIZE) {
-            throw new IllegalArgumentException(String.format("Message size %d exceeds limit of %d bytes", 
-                message.getBody().length(), MAX_MESSAGE_SIZE));
+            logger.error("Message size {} exceeds limit of {} bytes for message ID: {}", 
+                message.getBody().length(), MAX_MESSAGE_SIZE, message.getMessageId());
+            throw new IllegalArgumentException(
+                String.format("Message size %d exceeds limit of %d bytes", 
+                    message.getBody().length(), MAX_MESSAGE_SIZE));
         }
+        logger.debug("Message validation successful for message ID: {}", message.getMessageId());
     }
 
     /**
@@ -106,17 +125,26 @@ public class MessageProcessor {
      * @throws MessageProcessingException if the API call fails or returns a non-2xx status
      */
     private void processContent(String messageId, String content) {
-        // Add JSON validation before processing
-        validateJsonFormat(content);
-        
+        logger.debug("Processing content for message ID: {}", messageId);
         try {
+            validateJsonFormat(content);
             ResponseEntity<String> response = restTemplate.postForEntity(apiUrl, content, String.class);
+            
             if (!response.getStatusCode().is2xxSuccessful()) {
-                throw new MessageProcessingException("API call failed with status: " + response.getStatusCode());
+                logger.error("API call failed with status: {} for message ID: {}", 
+                    response.getStatusCode(), messageId);
+                throw new MessageProcessingException(ErrorCodes.API_RESPONSE_ERROR, 
+                    String.format("API call failed with status: %s", response.getStatusCode()));
             }
-            logger.info("Successfully processed message: {}", messageId);
+            logger.debug("Successfully processed content for message ID: {}", messageId);
+        } catch (JsonProcessingException e) {
+            logger.error("Invalid JSON format for message ID: {}", messageId, e);
+            throw new MessageProcessingException(ErrorCodes.INVALID_JSON_FORMAT, 
+                "Invalid JSON format in message", e);
         } catch (RestClientException e) {
-            throw new MessageProcessingException("API call failed", e);
+            logger.error("API call failed for message ID: {}", messageId, e);
+            throw new MessageProcessingException(ErrorCodes.API_CONNECTION_ERROR, 
+                "Failed to process message due to API error", e);
         }
     }
 
@@ -130,20 +158,28 @@ public class MessageProcessor {
      * @throws IllegalArgumentException if content is null
      */
     private String sanitizeMessageContent(String content) {
+        logger.debug("Sanitizing message content");
         if (content == null) {
+            logger.error("Cannot sanitize null content");
             throw new IllegalArgumentException("Content cannot be null");
         }
-        // Remove potentially dangerous characters
+        // Add your sanitization logic here
+        logger.debug("Message content sanitization completed");
         return content;
     }
 
-    private void validateJsonFormat(String content) {
+    private void validateJsonFormat(String content) throws JsonProcessingException {
+        logger.debug("Validating JSON format");
+        objectMapper.readTree(content);
+        logger.debug("JSON format validation successful");
+    }
+
+    private boolean isValidUrl(String url) {
         try {
-            objectMapper.readTree(content);
-        } catch (JsonProcessingException e) {
-            String errorMsg = String.format("Invalid JSON format: %s", e.getMessage());
-            logger.error(errorMsg);
-            throw new MessageProcessingException(errorMsg, e);
+            new java.net.URL(url).toURI();
+            return true;
+        } catch (Exception e) {
+            return false;
         }
     }
 } 

@@ -4,6 +4,8 @@ import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.MessageAttributeValue;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
+import com.learning.demo_sqslistener.exception.ErrorCodes;
+import com.learning.demo_sqslistener.exception.SQSProcessingException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,25 +28,26 @@ public class DeadLetterQueueService {
         this.deadLetterQueueUrl = deadLetterQueueUrl;
     }
 
-    public void moveMessageToDLQ(Message message, String failureReason) {
-        try {
-            SendMessageRequest dlqRequest = new SendMessageRequest()
-                .withQueueUrl(deadLetterQueueUrl)
-                .withMessageBody(message.getBody())
-                .withMessageAttributes(Map.of(
-                    "OriginalMessageId", new MessageAttributeValue()
-                        .withDataType("String")
-                        .withStringValue(message.getMessageId()),
-                    "FailureReason", new MessageAttributeValue()
-                        .withDataType("String")
-                        .withStringValue(failureReason)
-                ));
+    public boolean moveMessageToDLQ(Message message, String failureReason) {
+        SendMessageRequest dlqRequest = new SendMessageRequest()
+            .withQueueUrl(deadLetterQueueUrl)
+            .withMessageBody(message.getBody())
+            .withMessageAttributes(Map.of(
+                "OriginalMessageId", new MessageAttributeValue()
+                    .withDataType("String")
+                    .withStringValue(message.getMessageId()),
+                "FailureReason", new MessageAttributeValue()
+                    .withDataType("String")
+                    .withStringValue(failureReason)));
 
+        try {
             amazonSQS.sendMessage(dlqRequest);
             amazonSQS.deleteMessage(sourceQueueUrl, message.getReceiptHandle());
             logger.info("Moved message {} to DLQ with reason: {}", message.getMessageId(), failureReason);
+            return true;
         } catch (Exception e) {
-            logger.error("Failed to move message {} to DLQ", message.getMessageId(), e);
+            logger.error("Failed to move message {} to DLQ: {}", message.getMessageId(), e.getMessage(), e);
+            return false;
         }
     }
 } 
