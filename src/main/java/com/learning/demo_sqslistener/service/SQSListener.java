@@ -11,7 +11,6 @@ import org.slf4j.LoggerFactory;
 import com.google.common.util.concurrent.RateLimiter;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * Service class responsible for listening to AWS SQS messages and managing their processing.

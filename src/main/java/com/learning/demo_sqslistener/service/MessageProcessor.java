@@ -85,7 +85,8 @@ public class MessageProcessor {
         } catch (IllegalArgumentException | MessageProcessingException e) {
             String messageId = message != null ? message.getMessageId() : "null";
             logger.error("Processing failed for message {}: {}", messageId, e.getMessage(), e);
-            throw e;
+            throw new MessageProcessingException(ErrorCodes.MESSAGE_PROCESSING_ERROR, 
+            String.format("Message ID: %s", messageId), e);
         } catch (Exception e) {
             String messageId = message != null ? message.getMessageId() : "null";
             logger.error("Message processing failed for message {}", messageId, e);
@@ -175,7 +176,8 @@ public class MessageProcessor {
             logger.debug("JSON format validation successful");
         } catch (JsonProcessingException e) {
             logger.error("JSON validation failed: {}", e.getMessage(), e);
-            throw e;
+            throw new MessageProcessingException(ErrorCodes.INVALID_JSON_FORMAT, 
+                "Invalid JSON format in message", e);
         }
     }
 
