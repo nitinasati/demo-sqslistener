@@ -34,11 +34,8 @@ public class MessageProcessor {
     /** Target API endpoint URL */
     private final String apiUrl;
     
-    /**
-     * Maximum allowed size for message content in bytes.
-     * Messages exceeding this size will be rejected.
-     */
-    private static final int MAX_MESSAGE_SIZE = 10000;
+    /** Maximum allowed size for message content in bytes */
+    public static final int MAX_MESSAGE_SIZE = 10000;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -76,8 +73,8 @@ public class MessageProcessor {
      */
     public void processMessage(Message message) {
         try {
-            validateMessage(message); // This throws IllegalArgumentException if message is null
-            String messageId = message.getMessageId(); // Safe after validation
+            validateMessage(message);
+            String messageId = message.getMessageId();
             logger.debug("Starting to process message: {}", messageId);
             String sanitizedContent = sanitizeMessageContent(message.getBody());
             processContent(messageId, sanitizedContent);
@@ -85,8 +82,7 @@ public class MessageProcessor {
         } catch (IllegalArgumentException | MessageProcessingException e) {
             String messageId = message != null ? message.getMessageId() : "null";
             logger.error("Processing failed for message {}: {}", messageId, e.getMessage(), e);
-            throw new MessageProcessingException(ErrorCodes.MESSAGE_PROCESSING_ERROR, 
-            String.format("Message ID: %s", messageId), e);
+            throw e; // Re-throw the original exception
         } catch (Exception e) {
             String messageId = message != null ? message.getMessageId() : "null";
             logger.error("Message processing failed for message {}", messageId, e);
@@ -164,9 +160,11 @@ public class MessageProcessor {
             logger.error("Cannot sanitize null content");
             throw new IllegalArgumentException("Content cannot be null");
         }
-        // Add your sanitization logic here
+        // Basic XSS prevention
+        String sanitized = content.replaceAll("<script>.*?</script>", "")
+                                .replaceAll("<.*?>", "");
         logger.debug("Message content sanitization completed");
-        return content;
+        return sanitized;
     }
 
     private void validateJsonFormat(String content) throws JsonProcessingException {
